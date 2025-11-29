@@ -57,6 +57,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
   type VariantGroup = { name: string; options: string[] }
   
   // Default legacy variants
+  // Use type assertion only where strictly necessary for legacy JSON fields
   let variantGroups = parseJson<VariantGroup[]>((product as any).variants, [])
   let variantOptionLinks = parseJson<any>((product as any).variantOptionLinks, null)
   let variantImageMap = parseJson<any>((product as any).variantImageMap, null)
@@ -65,8 +66,8 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
   let initialSelection: Record<string, string> | null = null
 
   // Check for Parent/Child
-  const p = product as any
-  const parentId = p.parentId
+  // Now properly typed after prisma generate
+  const parentId = product.parentId
   let siblings: any[] = []
   let isParent = false
 
@@ -77,8 +78,8 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
       select: { id: true, slug: true, variantAttributes: true, amazonUrl: true }
     })
     // Set initial selection based on my own attributes
-    if (p.variantAttributes) {
-        initialSelection = p.variantAttributes as Record<string, string>
+    if (product.variantAttributes) {
+        initialSelection = product.variantAttributes as Record<string, string>
     }
   } else {
     // Check if I am a parent
