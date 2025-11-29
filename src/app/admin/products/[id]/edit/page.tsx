@@ -58,6 +58,9 @@ interface ProductForm {
   variantImageMap?: Record<string, Record<string, number>>
   variantOptionImages?: Record<string, Record<string, string>>
   variantOptionLinks?: Record<string, Record<string, string>>
+  // New Amazon-style fields
+  parentId?: string
+  variantAttributes?: Record<string, string>
 }
 
 interface VariantGroup { name: string; options: string[] }
@@ -141,6 +144,8 @@ export default function EditProduct() {
     variantImageMap: {},
     variantOptionImages: {},
     variantOptionLinks: {},
+    parentId: '',
+    variantAttributes: {},
   })
   // 新增：分类状态
   const [categories, setCategories] = useState<Category[]>([])
@@ -447,7 +452,7 @@ export default function EditProduct() {
               <ArrowLeft className="h-6 w-6" />
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">编辑产品</h1>
+              <h1 className="text-2xl font-bold text-gray-900">编辑产品 (v2)</h1>
               <p className="text-gray-600">修改产品信息</p>
             </div>
           </div>
@@ -676,6 +681,101 @@ export default function EditProduct() {
               >
                 <Plus className="h-4 w-4 mr-1" /> 添加变体组
               </button>
+            </div>
+
+            {/* 新增：Amazon风格父子变体设置 */}
+            <div className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
+              <h3 className="text-md font-medium text-blue-900 mb-2">父子变体关系 (新版Amazon风格)</h3>
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">父商品ID (Parent ID)</label>
+                  <p className="text-xs text-gray-500 mb-1">如果这是一个变体子商品，请输入父商品的ID。如果这是父商品本身，请留空。</p>
+                  <input
+                    type="text"
+                    value={form.parentId || ''}
+                    onChange={(e) => {
+                      setForm(prev => ({ ...prev, parentId: e.target.value }))
+                      setHasChanges(true)
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="输入父商品ID"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">变体属性 (Variant Attributes)</label>
+                  <p className="text-xs text-gray-500 mb-1">如果是子商品，请定义它的属性 (例如: Color=Red, Size=L)。</p>
+                  <div className="space-y-2">
+                    {Object.entries(form.variantAttributes || {}).map(([key, val], i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={key}
+                          placeholder="属性名 (e.g. Color)"
+                          className="w-1/3 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          onChange={(e) => {
+                            const newKey = e.target.value
+                            setForm(prev => {
+                                const newAttrs = { ...prev.variantAttributes }
+                                const oldVal = newAttrs[key]
+                                delete newAttrs[key]
+                                newAttrs[newKey] = oldVal
+                                return { ...prev, variantAttributes: newAttrs }
+                            })
+                            setHasChanges(true)
+                          }}
+                        />
+                        <input
+                          type="text"
+                          value={val}
+                          placeholder="属性值 (e.g. Red)"
+                          className="w-1/3 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          onChange={(e) => {
+                            setForm(prev => ({
+                                ...prev,
+                                variantAttributes: {
+                                    ...prev.variantAttributes,
+                                    [key]: e.target.value
+                                }
+                            }))
+                            setHasChanges(true)
+                          }}
+                        />
+                        <button
+                           type="button"
+                           onClick={() => {
+                               setForm(prev => {
+                                   const newAttrs = { ...prev.variantAttributes }
+                                   delete newAttrs[key]
+                                   return { ...prev, variantAttributes: newAttrs }
+                               })
+                               setHasChanges(true)
+                           }}
+                           className="text-red-600 hover:text-red-700"
+                        >
+                           <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                          setForm(prev => ({
+                              ...prev,
+                              variantAttributes: {
+                                  ...prev.variantAttributes,
+                                  [`Attribute${Object.keys(prev.variantAttributes || {}).length + 1}`]: ''
+                              }
+                          }))
+                          setHasChanges(true)
+                      }}
+                      className="text-blue-600 hover:text-blue-700 text-xs font-medium flex items-center mt-1"
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> 添加属性
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
             <p className="text-xs text-gray-500 mb-2">
               多维度链接支持：已支持“组合链接”（如颜色+尺寸）。当所有维度均选择且存在匹配的组合链接时，将优先跳转组合链接；否则优先使用选项链接，最后回退主链接。可在下方“组合链接（可选）”中添加。
