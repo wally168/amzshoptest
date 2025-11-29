@@ -85,6 +85,9 @@ export async function POST(request: NextRequest) {
       // 新增字段：前台按钮显示控制
       showBuyOnAmazon,
       showAddToCart,
+      // New Amazon-style fields
+      parentId,
+      variantAttributes,
     } = body
 
     // 简单规范化 Amazon 链接：提取 ASIN 并转换为标准 dp 链接
@@ -223,6 +226,8 @@ export async function POST(request: NextRequest) {
       // 新增：按钮显示控制
       showBuyOnAmazon: showBuyOnAmazon !== false,
       showAddToCart: showAddToCart !== false,
+      parentId: parentId || null,
+      variantAttributes: variantAttributes || null,
     }
 
     const product = await db.product.create({
