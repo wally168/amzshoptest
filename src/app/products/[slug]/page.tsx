@@ -57,7 +57,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
   type VariantGroup = { name: string; options: string[] }
   
   // Default legacy variants
-  // Use type assertion only where strictly necessary for legacy JSON fields
+  // Use type assertion for compatibility with potentially stale Prisma types
   let variantGroups = parseJson<VariantGroup[]>((product as any).variants, [])
   let variantOptionLinks = parseJson<any>((product as any).variantOptionLinks, null)
   let variantImageMap = parseJson<any>((product as any).variantImageMap, null)
@@ -66,26 +66,27 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
   let initialSelection: Record<string, string> | null = null
 
   // Check for Parent/Child
-  // Now properly typed after prisma generate
-  const parentId = product.parentId
+  // Cast to any to avoid TS errors if Prisma types aren't fully updated in IDE
+  const p = product as any
+  const parentId = p.parentId
   let siblings: any[] = []
   let isParent = false
 
   if (parentId) {
     // I am a child. Fetch siblings (including self potentially)
     siblings = await db.product.findMany({
-      where: { parentId: parentId, active: true },
-      select: { id: true, slug: true, variantAttributes: true, amazonUrl: true }
+      where: { parentId: parentId, active: true } as any,
+      select: { id: true, slug: true, variantAttributes: true, amazonUrl: true } as any
     })
     // Set initial selection based on my own attributes
-    if (product.variantAttributes) {
-        initialSelection = product.variantAttributes as Record<string, string>
+    if (p.variantAttributes) {
+        initialSelection = p.variantAttributes as Record<string, string>
     }
   } else {
     // Check if I am a parent
     const children = await db.product.findMany({
-      where: { parentId: product.id, active: true },
-      select: { id: true, slug: true, variantAttributes: true, amazonUrl: true }
+      where: { parentId: product.id, active: true } as any,
+      select: { id: true, slug: true, variantAttributes: true, amazonUrl: true } as any
     })
     if (children.length > 0) {
       isParent = true
