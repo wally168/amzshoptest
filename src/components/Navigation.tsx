@@ -1,0 +1,253 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { Menu, X, ShoppingBag, ShoppingCart } from 'lucide-react'
+import { useSettings } from '@/lib/settings'
+import { getCount, onCartChange } from '@/lib/cart'
+
+// 新增：动态导航项类型
+interface NavItem {
+  id: string
+  label: string
+  href: string
+  order: number
+  isExternal?: boolean
+}
+
+// 新增：默认导航（用于API为空时降级）
+const defaultNav: NavItem[] = [
+  { id: 'home', label: 'Home', href: '/', order: 1 },
+  { id: 'products', label: 'Products', href: '/products', order: 2 },
+  { id: 'about', label: 'About', href: '/about', order: 3 },
+  { id: 'contact', label: 'Contact', href: '/contact', order: 4 },
+]
+
+export default function Navigation({ initialNavItems = [] }: { initialNavItems?: NavItem[] }) {
+  const { settings, loading } = useSettings()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
+  // 新增：前台动态导航项（以服务端初始数据作为首屏渲染）
+  const [navItems, setNavItems] = useState<NavItem[]>(initialNavItems)
+  const [navLoading, setNavLoading] = useState(initialNavItems.length === 0)
+  const showSkeleton = navLoading && navItems.length === 0
+  // 新增：购物车数量
+  const [cartCount, setCartCount] = useState<number>(0)
+
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10)
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // 新增：加载导航数据（如果没有初始数据才显示loading）
+  useEffect(() => {
+    const load = async () => {
+      const shouldShowLoading = initialNavItems.length === 0
+      try {
+        if (shouldShowLoading) setNavLoading(true)
+        const res = await fetch('/api/navigation', { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data) && data.length) {
+            setNavItems(data)
+          } else {
+            // API返回空时使用默认导航
+            setNavItems(defaultNav)
+          }
+        } else {
+          setNavItems(defaultNav)
+        }
+      } catch (e) {
+        console.error('Navigation load failed:', e)
+        setNavItems(defaultNav)
+      } finally {
+        if (shouldShowLoading) setNavLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // 新增：订阅购物车变更（同页 + storage）
+  useEffect(() => {
+    setCartCount(getCount())
+    const unsubscribe = onCartChange(() => setCartCount(getCount()))
+    return unsubscribe
+  }, [])
+
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen)
+  }
+
+  const itemsToRender = navItems.filter((item) => item.href !== '/cart')
+
+  return (
+    <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+      isScrolled 
+        ? 'bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm' 
+        : 'bg-white/95 backdrop-blur-md border-b border-gray-200'
+    }`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center h-16">
+          {/* 左侧：Logo 保持不变，占用等比空间 */}
+          <div className="flex-1">
+            <Link href="/" className="flex items-center space-x-2 group">
+              <div className="relative">
+                {settings.logoUrl ? (
+                  <img
+                src={settings.logoUrl}
+                alt={settings.siteName || 'Site Logo'}
+                className="h-12 w-12 max-w-[48px] max-h-[48px] object-contain transition-transform group-hover:scale-105"
+              />
+                ) : (
+                  <>
+<ShoppingBag
+                  className="h-12 w-12 text-blue-600 transition-transform group-hover:scale-105"
+                />   <div className="absolute inset-0 bg-blue-600/20 rounded-full scale-0 group-hover:scale-150 transition-transform duration-300 opacity-0 group-hover:opacity-100"></div>
+                  </>
+                )}
+              </div>
+              <span className="text-xl font-semibold text-gray-900 tracking-tight">
+                {settings.siteName}
+              </span>
+            </Link>
+          </div>
+
+          {/* 中间：桌面导航 居中显示 */}
+          <div className="hidden md:flex items-center justify-center space-x-1">
+            {showSkeleton ? (
+              <div className="flex items中心 space-x-1">
+                <SkeletonPill />
+                <SkeletonPill />
+                <SkeletonPill />
+                <SkeletonPill />
+              </div>
+            ) : (
+              itemsToRender.map((item) => (
+                <NavLink key={item.id} href={item.href}>
+                  {item.label}
+                </NavLink>
+              ))
+            )}
+          </div>
+
+          {/* 右侧：购物车入口与移动端菜单按钮 */}
+          <div className="flex-1 flex justify-end items-center gap-2">
+            {/* Cart link always visible */}
+            <Link
+              href="/cart"
+              className="hidden md:inline-flex items-center px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100/50 rounded-lg transition-all duration-200"
+              aria-label="Cart"
+            >
+              <span className="relative inline-flex">
+                <ShoppingCart className="h-5 w-5" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-xs flex items-center justify-center">{cartCount}</span>
+                )}
+              </span>
+              <span className="ml-2">Cart</span>
+            </Link>
+
+            {/* Mobile menu button */}
+            <button
+              onClick={toggleMenu}
+              className="md:hidden p-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100/50 rounded-lg transition-all duration-200"
+              aria-label="Toggle menu"
+            >
+              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+            {/* Mobile cart icon */}
+            <Link
+              href="/cart"
+              className="md:hidden p-2 text-gray-700 hover:text-blue-600 hover:bg-gray-100/50 rounded-lg transition-all duration-200"
+              aria-label="Cart"
+            >
+              <span className="relative inline-flex">
+                <ShoppingCart className="h-6 w-6" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-xs flex items-center justify-center">{cartCount}</span>
+                )}
+              </span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Mobile Navigation */}
+        <div className={`md:hidden transition-all duration-300 ease-in-out ${
+          isMenuOpen 
+            ? 'max-h-64 opacity-100' 
+            : 'max-h-0 opacity-0 overflow-hidden'
+        }`}>
+          <div className="px-2 pt-2 pb-3 space-y-1 bg白/95 backdrop-blur-md border-t border-gray-200/50">
+            {showSkeleton ? (
+              <div className="space-y-1">
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+              </div>
+            ) : (
+              itemsToRender.map((item) => (
+                <MobileNavLink key={item.id} href={item.href} onClick={() => setIsMenuOpen(false)}>
+                  {item.label}
+                </MobileNavLink>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  )
+}
+
+function SkeletonPill() {
+  return (
+    <div className="h-9 w-20 rounded-full bg-gray-200 animate-pulse" />
+  )
+}
+
+function SkeletonRow() {
+  return (
+    <div className="h-10 rounded-lg bg-gray-200 animate-pulse" />
+  )
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="relative px-4 py-2 text-base font-medium text-gray-700 hover:text-blue-600 transition-colors duration-200 group"
+    >
+      {children}
+      <span className="absolute inset-x-4 bottom-0 h-0.5 bg-blue-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></span>
+    </Link>
+  )
+}
+
+function MobileNavLink({ 
+  href, 
+  children, 
+  onClick 
+}: { 
+  href: string; 
+  children: React.ReactNode; 
+  onClick: () => void 
+}) {
+  return (
+    <Link
+      href={href}
+      className="block px-4 py-3 text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50/50 rounded-xl transition-all duration-200"
+      onClick={onClick}
+    >
+      {children}
+    </Link>
+  )
+}

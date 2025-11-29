@@ -1,0 +1,80 @@
+export const dynamic = 'force-dynamic'
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { SettingsProvider } from "@/lib/settings";
+import AppShell from "@/components/AppShell";
+import { headers } from "next/headers";
+import AnalyticsInjector from "@/components/AnalyticsInjector";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
+
+// 在服务端安全获取当前请求的 Base URL（Next 16 headers 为异步）
+async function getBaseUrl(): Promise<string> {
+  try {
+    const h = await headers();
+    const host = h.get("host");
+    const proto = h.get("x-forwarded-proto") || "http";
+    if (host) return `${proto}://${host}`;
+  } catch {}
+  return process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3005";
+}
+
+// 动态获取站点设置（服务端）
+async function getSettings() {
+  try {
+    const baseUrl = await getBaseUrl();
+    const response = await fetch(`${baseUrl}/api/settings`, { cache: 'no-store' });
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (error) {
+    console.error('Failed to fetch settings:', error);
+  }
+  return { siteName: "Your Brand", siteDescription: "Discover premium products with exceptional quality and design", siteKeywords: "premium products, quality, design, shopping" };
+}
+
+// 服务器端预取导航（首屏初始数据）
+async function getNavigation() {
+  try {
+    const baseUrl = await getBaseUrl();
+    const response = await fetch(`${baseUrl}/api/navigation`, { cache: 'no-store' });
+    if (response.ok) {
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    }
+  } catch (error) {
+    console.error('Failed to fetch navigation:', error);
+  }
+  return [];
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+  return {
+    title: `${settings.siteName} - Premium Products`,
+    description: "Discover premium products with exceptional quality and design",
+    keywords: "premium products, quality, design, shopping",
+  };
+}
+
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode; }>) {
+  const settings = await getSettings();
+  const initialNavItems = await getNavigation();
+  return (
+    <html lang="en">
+      <body suppressHydrationWarning className={`${inter.variable} font-sans antialiased bg-white text-gray-900`}>
+        <SettingsProvider initialSettings={settings}>
+          <AppShell initialNavItems={initialNavItems}>
+            {children}
+          </AppShell>
+          <div dangerouslySetInnerHTML={{ __html: (settings as any).analyticsBodyHtml || '' }} />
+          <AnalyticsInjector />
+        </SettingsProvider>
+      </body>
+    </html>
+  );
+}

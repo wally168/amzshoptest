@@ -1,0 +1,129 @@
+import Link from 'next/link'
+import Layout from '@/components/Layout'
+import { db } from '@/lib/db'
+import { formatPrice } from '@/lib/utils'
+import AddToCartButton from '@/components/AddToCartButton'
+import FallbackImage from '@/components/FallbackImage'
+
+export default async function ProductsPage() {
+  let products: any[] = []
+  try {
+    products = await db.product.findMany({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
+    })
+  } catch (e) {
+    console.error('Failed to load products:', e)
+    products = []
+  }
+
+  const resolveImage = (p: any): string => {
+    const main = (p?.mainImage ?? '').trim()
+    if (main) return main
+    try {
+      const arr = JSON.parse(p?.images ?? '[]')
+      if (Array.isArray(arr) && arr.length > 0) {
+        const first = (arr[0] ?? '').trim()
+        if (first) return first
+      }
+    } catch {}
+    return 'https://placehold.co/600x600?text=No+Image'
+  }
+
+  return (
+    <Layout>
+      <div className="bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+              Our Products
+            </h1>
+            <p className="mx-auto mt-4 max-w-3xl text-lg text-gray-600">
+              Discover our carefully curated collection of premium products. Each item is selected for its quality, design, and value.
+            </p>
+          </div>
+
+          <div className="mt-16 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
+            {products.map((product) => {
+              const displayImage = resolveImage(product)
+              const price = Number(product?.price ?? 0)
+              const hasOriginal = typeof product?.originalPrice === 'number' && Number(product.originalPrice) > price
+              const amazonUrl = typeof product?.amazonUrl === 'string' ? product.amazonUrl : ''
+              const showBuy = (product as any).showBuyOnAmazon !== false && !!amazonUrl
+              const showAdd = (product as any).showAddToCart !== false
+
+              return (
+                <div key={product.id} className="group relative">
+                  <div className="aspect-square w-full overflow-hidden rounded-lg bg-gray-100">
+                    <FallbackImage
+                      src={displayImage}
+                      alt={product.title || 'Product image'}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  </div>
+                  <div className="mt-4 flex justify-between">
+                    <div className="flex-1">
+                      <h3 className="relative text-sm text-gray-700">
+                        <Link href={`/products/${product.slug}`}>
+                          <span aria-hidden="true" className="absolute inset-0" />
+                          {product.title || 'Untitled Product'}
+                        </Link>
+                      </h3>
+                      <div className="mt-2 flex items-center gap-2">
+                        <p className="text-lg font-medium text-gray-900">
+                          {formatPrice(price)}
+                        </p>
+                        {hasOriginal && (
+                          <p className="text-sm text-gray-500 line-through">
+                            {formatPrice(Number(product.originalPrice))}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <Link
+                          href={`/products/${product.slug}`}
+                          className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-orange-600 text-white text-sm font-semibold leading-tight text-center hover:bg-orange-500"
+                        >
+                          View Details
+                        </Link>
+                        {showBuy && (
+                          <a
+                            href={amazonUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold leading-tight text-center hover:bg-blue-500"
+                          >
+                            Buy on Amazon
+                          </a>
+                        )}
+                        {showAdd && (
+                          <div className="flex items-center">
+                            <AddToCartButton
+                              id={product.id}
+                              slug={product.slug}
+                              title={product.title}
+                              price={price}
+                              imageUrl={resolveImage(product)}
+                              size="sm"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {products.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No products available at the moment.</p>
+              <p className="text-gray-400 text-sm mt-2">Please check back later for new arrivals.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  )
+}
